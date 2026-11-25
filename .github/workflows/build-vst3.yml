@@ -1,0 +1,54 @@
+name: Build NOIR EQ (Windows VST3)
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Source/**'
+      - 'Assets/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-vst3.yml'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noir-eq-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-vst3:
+    name: Windows x64 / VST3 / Release
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure with CMake
+        run: cmake -S . -B build -A x64
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target NOIR_EQ_VST3 --parallel
+
+      - name: Package VST3
+        shell: pwsh
+        run: |
+          $plugin = Join-Path $PWD 'build/NOIR_EQ_artefacts/Release/VST3/NOIR EQ.vst3'
+          if (-not (Test-Path $plugin)) {
+            Write-Error "Expected VST3 bundle was not found: $plugin"
+          }
+          $out = Join-Path $PWD 'NOIR-EQ-Windows-x64-VST3.zip'
+          Compress-Archive -Path $plugin -DestinationPath $out -Force
+          Get-Item $out | Format-List Name, Length
+
+      - name: Upload compiled VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOIR-EQ-Windows-x64-VST3
+          path: NOIR-EQ-Windows-x64-VST3.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
